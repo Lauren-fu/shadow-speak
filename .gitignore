@@ -1,0 +1,25 @@
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Generated packages and local dependencies
+*.zip
+node_modules/
+coverage/
+*.log
+
+# Local recordings
+recordings/
+*.webm
+*.wav
+*.mp3
+*.m4a

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Shadow Speak",
+  "version": "0.4.5",
+  "description": "Practice YouTube phrases with bounded playback and local voice recording.",
+  "minimum_chrome_version": "116",
+  "permissions": ["sidePanel", "activeTab", "storage"],
+  "host_permissions": ["https://api.supadata.ai/*"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Open Shadow Speak" },
+  "side_panel": { "default_path": "panel.html" },
+  "content_scripts": [{
+    "matches": ["https://www.youtube.com/*"],
+    "js": ["content.js", "recording-content.js"],
+    "run_at": "document_idle"
+  }]
+}

@@ -4,10 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Shadow Speak</title>
+  <link rel="icon" type="image/png" href="icons/icon-32.png">
   <link rel="stylesheet" href="panel.css">
 </head>
 <body>
-  <header><h1>Shadow Speak</h1></header>
+  <header><img class="brand-logo" src="icons/icon-128.png" width="28" height="28" alt=""><h1>Shadow Speak</h1></header>
   <main>
     <section class="setup">
       <section class="cloud" id="cloud">
@@ -19,23 +20,24 @@
         <label class="check"><input id="ai-fallback" type="checkbox"> AI fallback (extra credits)</label>
         </details>
         </div>
-        <div class="actions"><button id="cloud-load" class="primary">Get full transcript</button><button id="change-key" class="link-button" aria-controls="api-setup" aria-expanded="false" hidden>Change API key</button><button id="cloud-cancel" hidden>Cancel</button></div>
+        <div class="actions"><button id="cloud-load" class="primary">Get full transcript</button><button id="change-key" class="icon-button" title="Change API key" aria-label="Change API key" aria-controls="api-setup" aria-expanded="false" hidden>⚙</button><button id="cloud-cancel" hidden>Cancel</button></div>
       </section>
-      <div class="settings">
+    </section>
+    <section class="practice-toolbar" id="practice-toolbar" aria-label="Practice controls">
+      <div class="settings controls">
         <div class="speed-control">
           <div class="speed-heading"><label for="rate">Playback speed</label><output id="rate-value" for="rate">1.00×</output></div>
           <input id="rate" type="range" min="0.5" max="1.5" step="0.05" value="1" aria-valuetext="1.00 times">
-          <div class="speed-labels" aria-hidden="true"><span>0.5×</span><span>1×</span><span>1.5×</span></div>
         </div>
-        <label>Pause boundary<select id="split-mode"><option value="seven">Every 7 seconds</option><option value="pause" selected>By pause</option></select></label>
+        <div class="split-control"><label for="split-mode">Pause boundary</label><div class="split-row"><select id="split-mode"><option value="seven">Every 7 seconds</option><option value="pause" selected>By pause</option></select><button id="split-refresh" class="icon-button" type="button" title="Re-split transcript" aria-label="Re-split transcript">↻</button></div></div>
       </div>
+    <div class="section-heading"><h2>Practice phrases</h2></div>
+    <div class="microphone-control mic-row"><span class="mic-icon" aria-hidden="true">🎤</span><label for="microphone" class="sr-only">Microphone</label><select id="microphone"><option value="">System default</option></select><button id="microphone-refresh" class="icon-button" type="button" title="Refresh microphones" aria-label="Refresh microphones">↻</button></div>
+    <p id="microphone-status" class="hint" role="status"></p>
     </section>
     <p id="status" role="status" aria-live="polite"></p>
     <audio id="voice-playback" hidden preload="metadata"></audio>
-    <div class="section-heading"><h2>Practice phrases</h2></div>
-    <div class="microphone-control"><label for="microphone">Microphone<select id="microphone"><option value="">System default</option></select></label><button id="microphone-refresh" type="button">Refresh</button></div>
-    <p id="microphone-status" class="hint" role="status"></p>
-    <div id="phrases"></div>
+    <div id="phrases" class="phrase-list"></div>
   </main>
   <script type="module" src="panel.mjs"></script>
 </body>

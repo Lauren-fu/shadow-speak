@@ -86,35 +86,73 @@ export function buildPracticePhrases(cues, { mode = "pause", targetSeconds = 7 }
       previous.end = Math.max(previous.end, cue.end);
     } else clean.push({ ...cue, text: cue.text.trim() });
   }
-  const units = [];
-  let sentence = null;
-  const finish = () => { if (sentence) units.push(sentence); sentence = null; };
+  if (!Number.isFinite(targetSeconds) || targetSeconds <= 0) throw new Error("Invalid phrase duration.");
+  const naturalUnits = [];
+  let sentence = [];
+  const finish = () => { if (sentence.length) naturalUnits.push(sentence); sentence = []; };
   const endsSentence = word => /[.!?。！？]["'”’)\]]*$/.test(word)
     && !/^(?:mr|mrs|ms|dr|prof|sr|jr|st|vs|e\.g|i\.e)\.$/i.test(word)
     && !/^(?:[A-Z]\.){2,}$/.test(word);
 
+  // First find local sentence, speaker and caption-gap boundaries. A period
+  // elsewhere in the video must not disable the fallback in this region.
   clean.forEach((cue, index) => {
     const nextStart = clean[index + 1]?.start;
     const end = Math.min(cue.end, nextStart ?? Infinity);
-    const tokens = cue.text.trim().match(/\S+/g) || [];
+    const tokens = cue.text.match(/\S+/g) || [];
     const totalWeight = tokens.reduce((sum, word) => sum + word.length + 1, 0);
     let weight = 0;
     tokens.forEach((word, tokenIndex) => {
       const start = cue.start + (end - cue.start) * weight / totalWeight;
       weight += word.length + 1;
       const stop = tokenIndex === tokens.length - 1 ? end : cue.start + (end - cue.start) * weight / totalWeight;
-      const pause = sentence && tokenIndex === 0 && clean[index - 1]?.reliableEnd !== false && start - sentence.end >= 0.35;
-      const speakerChange = sentence && cue.speaker && sentence.speaker && cue.speaker !== sentence.speaker;
+      const previous = sentence.at(-1);
+      const pause = previous && tokenIndex === 0 && clean[index - 1]?.reliableEnd !== false && start - previous.end >= 0.35;
+      const speakerChange = sentence.length && cue.speaker && sentence[0].speaker && cue.speaker !== sentence[0].speaker;
       if (pause || speakerChange) finish();
-      if (!sentence) sentence = { start, end: stop, text: word, speaker: cue.speaker || "", estimatedTiming: tokenIndex > 0 };
-      else { sentence.text += " " + word; sentence.end = Math.max(sentence.end, stop); }
-      if (endsSentence(word)) {
-        sentence.estimatedTiming ||= tokenIndex < tokens.length - 1;
-        finish();
-      }
+      sentence.push({ start, end: stop, text: word, speaker: cue.speaker || "",
+        cueStart: tokenIndex === 0, cueEnd: tokenIndex === tokens.length - 1 });
+      if (endsSentence(word)) finish();
     });
   });
   finish();
+
+  const maxSeconds = targetSeconds + 3;
+  const units = [];
+  function emit(words, first, last) {
+    units.push({ start: words[first].start, end: words[last].end,
+      text: words.slice(first, last + 1).map(word => word.text).join(" "),
+      speaker: words[first].speaker,
+      estimatedTiming: !words[first].cueStart || !words[last].cueEnd });
+  }
+  for (const words of naturalUnits) {
+    let first = 0;
+    while (first < words.length) {
+      const start = words[first].start;
+      if (words.at(-1).end - start <= maxSeconds) {
+        emit(words, first, words.length - 1);
+        break;
+      }
+      // Prefer a real caption edge near the target (5–10 seconds by default).
+      // If a single provider block spans this window, use an estimated word
+      // edge instead. Never invent a split in the middle of a word.
+      let cueEdge = -1, wordEdge = -1, cueDistance = Infinity, wordDistance = Infinity;
+      for (let last = first; last < words.length - 1; last++) {
+        const duration = words[last].end - start;
+        if (duration > maxSeconds) break;
+        const distance = Math.abs(duration - targetSeconds);
+        if (distance < wordDistance) { wordEdge = last; wordDistance = distance; }
+        if (words[last].cueEnd && duration >= targetSeconds - 2 && distance < cueDistance) {
+          cueEdge = last; cueDistance = distance;
+        }
+      }
+      // A lone word with an unusually long provider duration cannot safely
+      // be subdivided without audio alignment. Still advance and keep it.
+      const last = cueEdge >= 0 ? cueEdge : wordEdge >= 0 ? wordEdge : first;
+      emit(words, first, last);
+      first = last + 1;
+    }
+  }
   let result = units;
   if (mode === "seven") {
     result = [];
@@ -124,6 +162,7 @@ export function buildPracticePhrases(cues, { mode = "pause", targetSeconds = 7 }
         const current = group.end - group.start;
         const combined = unit.end - group.start;
         if ((unit.speaker && group.speaker && unit.speaker !== group.speaker) || unit.start - group.end >= 2 ||
+            combined > maxSeconds ||
             (combined > targetSeconds && Math.abs(current - targetSeconds) <= Math.abs(combined - targetSeconds))) {
           result.push(group); group = null;
         }

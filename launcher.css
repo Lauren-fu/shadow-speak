@@ -1,0 +1,3 @@
+#shadow-speak-launcher{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;height:36px;margin-right:8px;padding:0 18px;border:0;border-radius:18px;background:#ac543d;color:#fff;font:600 14px/1.2 Roboto,Arial,sans-serif;cursor:pointer}
+#shadow-speak-launcher:hover{background:#91442f}
+#shadow-speak-launcher:focus-visible{outline:3px solid #bd795a;outline-offset:3px}

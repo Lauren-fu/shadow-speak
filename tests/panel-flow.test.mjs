@@ -5,21 +5,23 @@ import { portPair } from "./port-harness.mjs";
 
 // Execute the real panel module using small DOM/Chrome test doubles. These
 // verify UI wiring, not Chrome rendering or live provider availability.
-test("panel restores key, loads captions, records and hears each card, caches, and cancels", async () => {
+test("panel restores key, loads captions, records and hears each card, caches, and cancels", async t => {
   const nodes = new Map();
   const node = () => ({
     value: "", checked: false, hidden: false, disabled: false, textContent: "", children: [],
-    handlers: {}, classList: { toggle() {} },
+    handlers: {}, classes: new Set(), classList: { toggle() {} },
     append(...items) { this.children.push(...items); },
     replaceChildren(...items) { this.children = items; },
     addEventListener(name, fn) { this.handlers[name] = fn; },
-    pause() {}, async play() {}, load() {}, removeAttribute() {}, setAttribute() {}, focus() {}
+    pause() {}, async play() {}, load() {}, removeAttribute() {}, setAttribute() {}, focus() {}, scrollIntoView() {}
   });
   globalThis.document = {
     getElementById(id) { if (!nodes.has(id)) nodes.set(id, node()); return nodes.get(id); },
     querySelectorAll() { return []; }, createElement: node, createTextNode: value => value
   };
-  globalThis.window = { addEventListener() {} };
+  const pageEvents = {};
+  globalThis.window = { addEventListener(name, fn) { pageEvents[name] = fn; } };
+  t.after(() => pageEvents.pagehide?.());
   let microphoneCalls = 0, activate, voiceLevel = 0.04, constraints;
   let pendingMicrophone = null, microphoneEntered = null, stoppedLateTracks = 0;
   Object.defineProperty(globalThis, "navigator", { configurable: true, value: {
@@ -116,7 +118,7 @@ test("panel restores key, loads captions, records and hears each card, caches, a
   assert.equal(bridgeMessages.at(-1).rate, 1.1);
   const [firstRecord, firstHear] = firstCard.children[1].children;
   const [secondRecord, secondHear] = secondCard.children[1].children;
-  assert.equal(firstCard.children[1].children.length, 2);
+  assert.equal(firstCard.children[1].children.length, 4);
   assert.equal(firstHear.disabled, true);
   let allowMicrophone;
   pendingMicrophone = new Promise(resolve => { allowMicrophone = resolve; });
@@ -138,10 +140,11 @@ test("panel restores key, loads captions, records and hears each card, caches, a
   assert.equal($("microphone").title, "Using: MacBook Microphone");
   assert.equal($("microphone-status").textContent, "");
   await new Promise(resolve => setTimeout(resolve, 160));
+  assert.match(firstCard.children[1].children[3].textContent, /^\d+:\d{2}$/);
   assert.ok(firstCard.children[4].children[0].value > 0);
   assert.equal(firstCard.children[4].children[1].textContent, "");
   assert.equal(secondRecord.disabled, true);
-  assert.equal(bridgeMessages.at(-1).type, "stop");
+  assert.ok(bridgeMessages.some(message => message.type === "stop"));
   await firstRecord.handlers.click();
   assert.equal(firstCard.children[2].textContent, "Click Hear to listen");
   assert.equal(firstHear.disabled, false);
@@ -152,7 +155,7 @@ test("panel restores key, loads captions, records and hears each card, caches, a
   assert.equal(secondCard.children[2].textContent, "Click Hear to listen");
   $("voice-playback").muted = true;
   $("voice-playback").volume = 0;
-  await firstHear.handlers.click();
+  await pageEvents.keydown({ key: "h", preventDefault() {} });
   const firstUrl = $("voice-playback").src;
   assert.ok(firstUrl.startsWith("blob:"));
   assert.equal($("voice-playback").muted, false);
@@ -164,11 +167,15 @@ test("panel restores key, loads captions, records and hears each card, caches, a
   assert.notEqual(firstUrl, secondUrl);
   $("split-mode").value = "seven";
   await $("split-mode").handlers.change();
+  assert.equal($("phrases").children.length, 2, "choosing a mode waits for refresh");
+  assert.match($("status").textContent, /re-split/);
+  await $("split-refresh").handlers.click();
   assert.equal($("phrases").children.length, 1);
   assert.equal($("phrases").children[0].children[1].children[1].disabled, true);
   assert.equal(requests, 1);
   $("split-mode").value = "pause";
   await $("split-mode").handlers.change();
+  await $("split-refresh").handlers.click();
   assert.equal($("phrases").children.length, 2);
   await $("phrases").children[0].children[1].children[1].handlers.click();
   assert.equal($("voice-playback").src, firstUrl);
@@ -220,4 +227,24 @@ test("panel restores key, loads captions, records and hears each card, caches, a
   assert.equal($("cloud-load").disabled, false);
   assert.equal($("phrases").children.length, 0);
   assert.equal($("status").textContent, "");
+  // A quota failure must be visible, preserve the usable transcript in this
+  // panel, and never silently re-bill on another Get click.
+  const originalSet = chrome.storage.local.set;
+  chrome.storage.local.set = async values => {
+    if (Object.keys(values).some(key => key.startsWith("transcript:v1:"))) throw new Error("QUOTA_BYTES exceeded");
+    return originalSet(values);
+  };
+  globalThis.fetch = async () => {
+    requests++;
+    return { ok: true, status: 200, json: async () => ({ lang: "en", content: [
+      { offset: 1000, duration: 1500, text: "Saved only in memory." }
+    ] }) };
+  };
+  await $("cloud-load").handlers.click();
+  assert.equal(requests, 2);
+  assert.equal($("phrases").children.length, 1);
+  assert.match($("status").textContent, /could not be saved/);
+  assert.equal(saved[`transcript:v1:${currentVideo}`], undefined);
+  await $("cloud-load").handlers.click();
+  assert.equal(requests, 2);
 });

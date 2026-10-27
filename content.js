@@ -44,8 +44,9 @@
   document.addEventListener("yt-navigate-start", () => cancel(true));
   document.addEventListener("timeupdate", checkBoundary, true);
   document.addEventListener("seeking", () => {
-    if (active && !active.initialSeek &&
-        (active.media.currentTime < active.start - 0.15 || active.media.currentTime > active.end + 0.15)) cancel(true);
+    // A progress-bar seek returns control to normal YouTube playback. Never
+    // keep a stale sentence deadline or pause the video at the old boundary.
+    if (active && !active.initialSeek) cancel();
   }, true);
 
   function getCaptions() {
@@ -87,12 +88,14 @@
         id: videoId(), title: document.querySelector("h1.ytd-watch-metadata")?.textContent.trim() || document.title,
         supported: new URL(location.href).pathname === "/watch" && Boolean(videoId()),
         hasVideo: Boolean(media),
-        duration: media?.duration
+        duration: media?.duration, currentTime: media?.currentTime,
+        paused: media?.paused, isAd: Boolean(isAd())
       };
       if (message.type === "captions") return { ...getCaptions(), id: videoId() };
       if (message.id !== videoId()) throw new Error("The video changed. Load its transcript before practicing.");
       if (!media) throw new Error("The video player is not ready.");
       if (message.type === "stop") { cancel(); media.pause(); return {}; }
+      if (message.type === "cancel") { cancel(); return {}; }
       if (message.type === "rate") {
         if (!Number.isFinite(message.rate) || message.rate < 0.5 || message.rate > 1.5) throw new Error("Invalid playback speed.");
         media.playbackRate = message.rate;

@@ -116,8 +116,25 @@ test("page info identifies a watch page and its player independently of tab meta
   assert.equal(info.supported, true);
   assert.equal(info.hasVideo, true);
   assert.equal(info.id, "abc");
+  assert.equal(info.currentTime, 0);
+  assert.equal(info.paused, true);
+  assert.equal(info.isAd, false);
   h.location.href = "https://www.youtube.com/";
   assert.equal((await h.send("info")).supported, false);
+});
+test("a manual YouTube seek releases the phrase deadline without pausing normal playback", async () => {
+  const h = playerHarness();
+  await h.send("play", { start: 1, end: 3, rate: 1 });
+  h.media.currentTime = 70;
+  h.events.seeking();
+  h.tick(); h.deadline();
+  assert.equal(h.media.currentTime, 70);
+  assert.equal(h.media.paused, false);
+  assert.equal((await h.send("info")).currentTime, 70);
+  await h.send("play", { start: 1, end: 3, rate: 1 });
+  await h.send("cancel");
+  h.media.currentTime = 4; h.tick();
+  assert.equal(h.media.paused, false);
 });
 test("a new phrase replaces the previous stop boundary", async () => {
   const h = playerHarness();
